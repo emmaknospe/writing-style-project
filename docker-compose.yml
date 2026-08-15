@@ -1,0 +1,53 @@
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: writing-style-qdrant
+    restart: unless-stopped
+    ports:
+      - "${QDRANT_HTTP_PORT:-6333}:6333"
+      - "${QDRANT_GRPC_PORT:-6334}:6334"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    networks:
+      - app-network
+
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: writing-style-api
+    restart: unless-stopped
+    depends_on:
+      - qdrant
+    environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-5}
+      QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
+      QDRANT_COLLECTION_NAME: ${QDRANT_COLLECTION_NAME:-writing_style}
+      QDRANT_VECTOR_SIZE: ${QDRANT_VECTOR_SIZE:-1536}
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-http://localhost:5173,http://localhost:3000}
+    ports:
+      - "${API_PORT:-8000}:8000"
+    networks:
+      - app-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: writing-style-frontend
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    networks:
+      - app-network
+
+volumes:
+  qdrant_storage:
+    name: writing-style-qdrant-storage
+
+networks:
+  app-network:
+    name: writing-style-network
