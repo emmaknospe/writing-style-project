@@ -1,0 +1,5 @@
+# Test-only dependencies. Not installed into the api image -- see api/Dockerfile,
+# which installs requirements.txt alone.
+#   pip install -r api/requirements-dev.txt && cd api && python -m pytest tests/
+-r requirements.txt
+pytest>=8.0,<9.0

@@ -4,12 +4,24 @@
 # node
 frontend/node_modules/
 frontend/dist/
+frontend/*.tsbuildinfo
 
 # python
 api/__pycache__/
 api/**/__pycache__/
 api/.venv/
+.venv/
+**/__pycache__/
 *.pyc
+
+# corpus: nothing under raw/ or intermediate/ is ignored. The private halves
+# hold synthetic material we generate ourselves, so they are committed and
+# reviewed exactly like the public halves. If genuinely non-redistributable
+# material ever lands here, ignore that material specifically rather than
+# re-blanketing the directory.
+
+# tagging: classifier response cache (rebuildable, ~1MB, churns every run)
+tagging/.tagcache.json
 
 # local-only config (machine-specific; see CLAUDE.md)
 CLAUDE.local.md

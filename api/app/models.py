@@ -148,6 +148,11 @@ class Section(TimestampMixin, Base):
         cascade="all, delete-orphan",
         order_by="SectionSource.position",
     )
+    web_sources: Mapped[list["SectionWebSource"]] = relationship(
+        back_populates="section",
+        cascade="all, delete-orphan",
+        order_by="SectionWebSource.position",
+    )
     voice_profile: Mapped[VoiceProfile | None] = relationship()
 
 
@@ -174,10 +179,109 @@ class SectionSource(Base):
     title: Mapped[str | None] = mapped_column(String(500), nullable=True)
     speaker: Mapped[str | None] = mapped_column(String(200), nullable=True)
     date: Mapped[str | None] = mapped_column(String(10), nullable=True)
-    speech_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    category: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    voice: Mapped[str | None] = mapped_column(String(20), nullable=True)
     source_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     relevance_score: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=_utcnow, nullable=False)
 
     section: Mapped[Section] = relationship(back_populates="sources")
+
+
+class SectionWebSource(Base):
+    """A web citation supporting a section.
+
+    Separate from SectionSource rather than a nullable-point-id variant of it,
+    because the two are verified in completely different ways: a corpus source
+    is re-findable in Qdrant by id, a web source is a URL we can only check was
+    actually returned by a search at the time it was written.
+    """
+
+    __tablename__ = "section_web_sources"
+    __table_args__ = (
+        UniqueConstraint("section_id", "url", name="uq_section_web_source_url"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    section_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("sections.id", ondelete="CASCADE"), nullable=False
+    )
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    url: Mapped[str] = mapped_column(Text, nullable=False)
+    title: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    claim: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=_utcnow, nullable=False)
+
+    section: Mapped[Section] = relationship(back_populates="web_sources")
+
+
+class Brief(TimestampMixin, Base):
+    """Turns a speech into an event brief: the prompt it came from, the
+    surrounding matter that isn't a talking point, and the agent conversation.
+
+    A brief *is* a speech -- the talking points are its sections and the
+    citations are its section sources -- so this table only carries what the
+    speech tables have nowhere to put.
+
+    `status` drives the approval gate:
+        researching -> outline_proposed -> drafting -> ready
+    returning to `drafting` on each revision. Prose is only ever written in the
+    `drafting` transition, which is what makes the gate structural rather than
+    a matter of the model being asked nicely.
+    """
+
+    __tablename__ = "briefs"
+
+    speech_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("speeches.id", ondelete="CASCADE"), primary_key=True
+    )
+    event_prompt: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="researching")
+
+    event_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    framing: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Newline-separated rather than JSON: they render as bullets and nothing
+    # queries into them, and the rest of this schema keeps to plain columns.
+    likely_questions: Mapped[str | None] = mapped_column(Text, nullable=True)
+    gaps: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # pydantic-ai's own message history, verbatim from all_messages_json(), so a
+    # later turn can continue the run without repeating the research. Opaque on
+    # purpose: nothing here parses it, and its shape belongs to the library.
+    agent_messages: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    speech: Mapped[Speech] = relationship()
+    messages: Mapped[list["BriefMessage"]] = relationship(
+        back_populates="brief",
+        cascade="all, delete-orphan",
+        order_by="BriefMessage.position",
+    )
+
+
+class BriefMessage(Base):
+    """One line of the visible transcript.
+
+    Deliberately not derived from `Brief.agent_messages`: that blob is
+    pydantic-ai's internal format, and the UI should not break when the library
+    changes it. This is the display copy -- what a person said and what the
+    agent said back, plus the activity lines worth keeping after a run.
+    """
+
+    __tablename__ = "brief_messages"
+    __table_args__ = (
+        Index("ix_brief_messages_brief_position", "brief_id", "position"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    brief_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("briefs.speech_id", ondelete="CASCADE"), nullable=False
+    )
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    role: Mapped[str] = mapped_column(String(20), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=_utcnow, nullable=False)
+
+    brief: Mapped[Brief] = relationship(back_populates="messages")
