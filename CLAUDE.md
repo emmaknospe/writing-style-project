@@ -44,9 +44,12 @@ Corpus path: scrapers → `raw/` → `tagging/tag.py` → `intermediate/` →
 The corpus moves through two stages, both Markdown with frontmatter and
 filenames `YYYY-MM-DD-slug.md`:
 
-- `raw/{public,private}/` — exactly what the scrapers pulled, flat. `private/`
-  is gitignored and currently empty; it exists so non-redistributable material
-  can be added without restructuring.
+- `raw/public/` — exactly what the scrapers pulled, flat.
+- `raw/private/` — synthetic internal documents, grouped in subfolders by kind
+  (`fact_sheets/`, `briefing_memos/`, `background/`, `synthetic_people/`).
+  Committed and reviewed like the public half; `tag.py` recurses, and the
+  subfolders disappear at the `intermediate/` stage anyway, which is organized
+  by category.
 - `intermediate/{public,private}/<category>/` — the classified copies that
   ingest actually reads. The category is a directory name.
 
@@ -66,6 +69,20 @@ invalidated. Don't add hand-written classification fields to either stage — ad
 to the taxonomy and re-tag instead.
 
 `scrapers/` holds only the scraper scripts; their output is `raw/public/`.
+
+### Synthetic material
+
+Everything under `raw/private/` is **synthetic** — staff-style documents written
+to look like a governor's office's working material. The content is grounded in
+the real record in `raw/public/`, but these are not real records and not
+Spanberger's words. They classify as `category: internal-document` and
+`voice: third-party`.
+
+They must stay identifiable from metadata alone: `chunk_body` splits on a
+220-word window, so a document's in-body disclaimer only reaches its first
+chunk, while `_format_hit` labels every chunk. So keep the `[SYNTHETIC] ` title
+prefix, keep `speaker` set to the synthetic authoring office rather than
+`Abigail Spanberger`, and keep the disclaimer in `notes`.
 
 ## Working on this
 

@@ -13,11 +13,11 @@ api/.venv/
 **/__pycache__/
 *.pyc
 
-# corpus: private material is never committed, but the directories must exist
-raw/private/*
-intermediate/private/*
-!raw/private/.gitkeep
-!intermediate/private/.gitkeep
+# corpus: nothing under raw/ or intermediate/ is ignored. The private halves
+# hold synthetic material we generate ourselves, so they are committed and
+# reviewed exactly like the public halves. If genuinely non-redistributable
+# material ever lands here, ignore that material specifically rather than
+# re-blanketing the directory.
 
 # tagging: classifier response cache (rebuildable, ~1MB, churns every run)
 tagging/.tagcache.json
