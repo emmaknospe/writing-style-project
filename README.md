@@ -38,5 +38,13 @@ I then started thinking about the actual application experience. This was diffic
 
 Originally, this was more complex, but I also had some trouble getting claude to understand me. Being limited to Sonnet 5 to avoid blowing through my usage limits was difficult and I found myself missing Opus 😔
 
+### Problems
 
+Around noon, I was aware of a few problems:
+1. I'd overprioritized getting data and spent a bit too long on it.
+2. I was treating this too much like an interview and insufficiently collaboratively. 
+3. I was likely being overly hacky / ambitious. 
+
+
+Generating actual talking points worked, but the workflow was pretty incorrect. It needed to step back out into planning. I also got feedback from Shannon about the form. I decided to take a step back and split into two agents, one focused on collaboration and one focused on 
 
