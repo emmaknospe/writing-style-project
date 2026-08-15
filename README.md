@@ -46,5 +46,14 @@ Around noon, I was aware of a few problems:
 3. I was likely being overly hacky / ambitious. 
 
 
-Generating actual talking points worked, but the workflow was pretty incorrect. It needed to step back out into planning. I also got feedback from Shannon about the form. I decided to take a step back and split into two agents, one focused on collaboration and one focused on 
+Generating actual talking points worked, but the workflow was pretty incorrect.
 
+I brainstormed with Shannon at 2 PM for a better way to tackle this problem. We came up with a better design focused on five pieces of information:
+
+1. Understanding the event details -- purpose, topic, location, and audience
+2. Understanding the topic and looking at supporting evidence in private data for this topic.
+3. Understanding the principal, their voice and their background.
+4. Researching recent events surrounding the issue.
+5. Formatting towards an output template.
+
+For 3., we separated into firstly the challenge of understanding the priorities and background, which we decided to encode into our settings, and secondarily understanding the voice itself and how it works operationally, which I wanted to try as a separate pass at the end. 
