@@ -9,6 +9,11 @@ class Settings(BaseSettings):
     qdrant_collection_name: str = "writing_style"
     qdrant_vector_size: int = 1536
 
+    google_cloud_project: str
+    google_cloud_location: str = "us-central1"
+    gemini_embedding_model: str = "gemini-embedding-001"
+    rag_top_k: int = 5
+
     cors_allow_origins: str = "http://localhost:5173,http://localhost:3000"
 
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=False)

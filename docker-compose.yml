@@ -26,6 +26,13 @@ services:
       QDRANT_COLLECTION_NAME: ${QDRANT_COLLECTION_NAME:-writing_style}
       QDRANT_VECTOR_SIZE: ${QDRANT_VECTOR_SIZE:-1536}
       CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-http://localhost:5173,http://localhost:3000}
+      GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT}
+      GOOGLE_CLOUD_LOCATION: ${GOOGLE_CLOUD_LOCATION:-us-central1}
+      GEMINI_EMBEDDING_MODEL: ${GEMINI_EMBEDDING_MODEL:-gemini-embedding-001}
+      RAG_TOP_K: ${RAG_TOP_K:-5}
+      GOOGLE_APPLICATION_CREDENTIALS: /root/.config/gcloud/application_default_credentials.json
+    volumes:
+      - ${HOME}/.config/gcloud:/root/.config/gcloud:ro,z
     ports:
       - "${API_PORT:-8000}:8000"
     networks:

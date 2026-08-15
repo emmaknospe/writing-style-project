@@ -36,3 +36,18 @@ def ensure_collection(max_retries: int = 10, retry_delay_seconds: float = 2.0) -
             if attempt == max_retries:
                 raise
             time.sleep(retry_delay_seconds)
+
+
+def search(query_vector: list[float], top_k: int) -> list[dict]:
+    """Return the top_k nearest corpus chunks to query_vector, each as
+    {score, **payload} -- payload keys: title, speaker, date, role,
+    speech_type, location, source_name, source_url, retrieved_date,
+    word_count, tags, source_file, chunk_index, chunk_count, text.
+    """
+    result = qdrant_client.query_points(
+        collection_name=settings.qdrant_collection_name,
+        query=query_vector,
+        limit=top_k,
+        with_payload=True,
+    )
+    return [{"score": point.score, **point.payload} for point in result.points]

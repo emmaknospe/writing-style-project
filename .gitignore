@@ -11,5 +11,10 @@ api/**/__pycache__/
 api/.venv/
 *.pyc
 
+# local-only config (machine-specific; see CLAUDE.md)
+CLAUDE.local.md
+docker-compose.override.yml
+.claude
+
 # misc
 .DS_Store
