@@ -48,7 +48,7 @@ Around noon, I was aware of a few problems:
 
 Generating actual talking points worked, but the workflow was pretty incorrect.
 
-I brainstormed with Shannon at 2 PM for a better way to tackle this problem. We came up with a better design focused on five pieces of information:
+I brainstormed with Shannon at 12 PM for a better way to tackle this problem. We came up with a better design focused on five pieces of information:
 
 1. Understanding the event details -- purpose, topic, location, and audience
 2. Understanding the topic and looking at supporting evidence in private data for this topic.
@@ -57,3 +57,23 @@ I brainstormed with Shannon at 2 PM for a better way to tackle this problem. We 
 5. Formatting towards an output template.
 
 For 3., we separated into firstly the challenge of understanding the priorities and background, which we decided to encode into our settings, and secondarily understanding the voice itself and how it works operationally, which I wanted to try as a separate pass at the end. 
+
+### Refocus
+
+I spent the afternoon reworking the agent in order to get it to match the process described.
+
+### What's present
+I think the part of this that I'm most happy about is the data ingest pipeline. I like the setup of having independent scrapers that pull together data to build the dataset in `raw` and then the processing that takes that data into `intermediate` and then embeds it into QDrant.
+
+I spent a solid amount of time in the afternoon working on pulling together the agent loop, but it was the sort of thing that I'd iterated on too long and (honestly) if I had more time I'd throw out. After my conversation with Shannon, I became convinced I was adding too much of the wrong structure and wanted to focus it on a more natural and interactive chat style (simply with the appropriate tools). I ended up with an agent loop that worked but which I'm not particularly proud of.
+
+I don't like the frontend at all. It's simplistic, and functional, but I think the right shape for this is likely significantly different.
+
+### Where I'd go next
+
+Picking up this project from here, I'd probably delete and redraft the entire agent loop and recode it from the ground up. This is mainly because I overcomplicated it at earlier steps and I think it's a bit crufty right now -- redrafting, I would focus on just a prompted guide of the steps to follow through the application, along with simple tools for querying the KB, web searching, etc.. This isn't far from where we ended up, but given the amount of iteration that went into a simple component, I think restarting will be cheap, quick, and clean. There are a lot of data structures in this I did not end up using and those should be removed (in particular, much of the database model is just wrong for this application). 
+
+I also think there's more to be done on the KB -- I didn't spend as much time as I would have liked validating the data there or carefully curating it, and while I like the scraping process itself, the data makes or breaks the application. 
+
+In the mid-term, evals would be an interesting add, both from the perspective of "does the office's goal get accomplished" -- this is the harder one, but you could look at whether or not there was positive media coverage, or legislation ends up being passed -- and, in a more confined space, implementing measures for tone, accuracy, etc.
+
