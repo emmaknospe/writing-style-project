@@ -1,21 +1,17 @@
 import logging
-import uuid
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic_ai.messages import NativeToolReturnPart
 
-from app.agent import chat_agent
+from app.agent import BriefDeps, brief_agent
 from app.config import settings
+from app.schemas import BriefRequest, TalkingPointsBrief
 from app.vector_store import ensure_collection
 
 logging.basicConfig(level=logging.INFO)
-
-# In-memory per-session conversation history. Single-process, non-persistent —
-# fine for one API replica; move to Redis/a DB keyed by session_id if the API
-# is ever scaled out or needs restart-durability.
-_SESSIONS: dict[str, list] = {}
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -35,35 +31,71 @@ app.add_middleware(
 )
 
 
-class ChatRequest(BaseModel):
-    message: str
-    session_id: str | None = None
-
-
-class ChatResponse(BaseModel):
-    reply: str
-    session_id: str
-
-
 @app.get("/health")
 async def health():
     return {"status": "ok"}
 
 
-@app.post("/api/chat", response_model=ChatResponse)
-async def chat(payload: ChatRequest):
-    if not payload.message.strip():
-        raise HTTPException(status_code=400, detail="message must not be empty")
+def _searched_web_urls(messages: list) -> set[str]:
+    """URLs that Anthropic's web search actually returned during this run.
 
-    session_id = payload.session_id or str(uuid.uuid4())
-    history = _SESSIONS.get(session_id, [])
+    Web search is server-side, so its results arrive as `NativeToolReturnPart`s
+    in the message history rather than through a tool function we control --
+    this is the only place they can be read back. `content` is Anthropic's raw
+    result payload: normally a list of result dicts, but an error (e.g.
+    `max_uses_exceeded`) instead yields a single object, hence the isinstance
+    guards rather than a bare comprehension.
+    """
+    urls: set[str] = set()
+    for message in messages:
+        for part in getattr(message, "parts", []):
+            if not isinstance(part, NativeToolReturnPart):
+                continue
+            if part.tool_name != "web_search":
+                continue
+            content = part.content
+            if not isinstance(content, list):
+                continue
+            for result in content:
+                if isinstance(result, dict) and result.get("url"):
+                    urls.add(result["url"])
+    return urls
+
+
+def _drop_unbacked_web_citations(brief: TalkingPointsBrief, messages: list) -> None:
+    """Discard web citations whose URL never appeared in a search result.
+
+    The corpus half of this check lives in the agent's output validator, which
+    has `BriefDeps` in scope. Web results have no equivalent hook, so the
+    filtering happens here, where the message history is available.
+    """
+    allowed = _searched_web_urls(messages)
+    dropped = 0
+    for point in brief.points:
+        kept = [c for c in point.web_context if c.url in allowed]
+        dropped += len(point.web_context) - len(kept)
+        point.web_context = kept
+    if dropped:
+        logger.warning(
+            "dropped %d web citation(s) with URLs not returned by web search", dropped
+        )
+
+
+@app.post("/api/talking-points", response_model=TalkingPointsBrief)
+async def talking_points(payload: BriefRequest) -> TalkingPointsBrief:
+    if not payload.prompt.strip():
+        raise HTTPException(status_code=400, detail="prompt must not be empty")
+
+    # Stateless by design: a brief is one prompt in, one brief out. There is no
+    # conversation history to carry, so there is no session store to leak.
+    deps = BriefDeps()
 
     try:
-        result = await chat_agent.run(payload.message, message_history=history)
+        result = await brief_agent.run(payload.prompt, deps=deps)
     except Exception as exc:
         logging.exception("agent run failed")
         raise HTTPException(status_code=502, detail="upstream model error") from exc
 
-    _SESSIONS[session_id] = result.all_messages()
-
-    return ChatResponse(reply=result.output, session_id=session_id)
+    brief = result.output
+    _drop_unbacked_web_citations(brief, result.all_messages())
+    return brief

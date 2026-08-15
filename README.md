@@ -1,6 +1,16 @@
-# writing-style chat
+# writing-style talking points
 
-A chat app: React frontend, FastAPI backend running a pydantic-ai agent (Claude via Anthropic), with Qdrant running alongside as a vector store, populated by a standalone ingest pipeline (see `ingest/`).
+Describe an upcoming event, get back a talking-point brief for Abigail Spanberger.
+
+React frontend, FastAPI backend running a pydantic-ai agent (Claude via Anthropic).
+The agent grounds each brief in two sources: her prior remarks, retrieved from a
+Qdrant vector store populated by a standalone ingest pipeline (see `ingest/`), and
+current information from Anthropic's server-side web search. Citations from both
+are checked against what the tools actually returned before the brief is sent, so
+the model cannot invent a source URL.
+
+Web search is billed per search ($10 per 1,000) on top of tokens; `WEB_SEARCH_MAX_USES`
+(default 5) caps it per brief, and `0` disables it entirely.
 
 ## Setup
 

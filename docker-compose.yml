@@ -29,7 +29,9 @@ services:
       GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT}
       GOOGLE_CLOUD_LOCATION: ${GOOGLE_CLOUD_LOCATION:-us-central1}
       GEMINI_EMBEDDING_MODEL: ${GEMINI_EMBEDDING_MODEL:-gemini-embedding-001}
-      RAG_TOP_K: ${RAG_TOP_K:-5}
+      BRIEF_TOP_K: ${BRIEF_TOP_K:-8}
+      WEB_SEARCH_MAX_USES: ${WEB_SEARCH_MAX_USES:-5}
+      MAX_OUTPUT_TOKENS: ${MAX_OUTPUT_TOKENS:-16000}
       GOOGLE_APPLICATION_CREDENTIALS: /root/.config/gcloud/application_default_credentials.json
     volumes:
       - ${HOME}/.config/gcloud:/root/.config/gcloud:ro,z

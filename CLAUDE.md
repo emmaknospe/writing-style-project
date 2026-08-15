@@ -1,6 +1,7 @@
 # writing-style
 
-A RAG chat app over a corpus of Abigail Spanberger's speeches and campaign ads.
+Generates event talking-point briefs for Abigail Spanberger, grounded in a RAG
+corpus of her speeches and campaign ads plus live web search.
 
 @CLAUDE.local.md
 
@@ -15,18 +16,44 @@ Four pieces, three of them containers (`docker-compose.yml`):
 | `qdrant` | Vector store, `qdrant/qdrant:latest`, named volume for storage |
 | `ingest/` | Standalone pipeline run **on the host**, not a container — chunks `data/*.md`, embeds via Gemini on Vertex AI, upserts into Qdrant |
 
-Request path: browser → nginx (`:3000`) → `/api/chat` → FastAPI → pydantic-ai agent
-→ `search_corpus` tool → Gemini embedding → Qdrant search → Claude answers with
-citations.
+Request path: browser → nginx (`:3000`) → `/api/talking-points` → FastAPI →
+pydantic-ai agent → **two** grounding sources in parallel:
+
+- `search_corpus` (a normal client-side tool) → Gemini embedding → Qdrant — what
+  she has *already said*. The corpus is a fixed snapshot.
+- Anthropic's **server-side** web search (`web_search_20260209`) — what is
+  *currently true*. It executes on Anthropic's infrastructure, so there is no
+  tool function for it in this repo.
+
+The agent returns a typed `TalkingPointsBrief`, not prose.
+
+The endpoint is **stateless** — one prompt in, one brief out, no conversation
+history and so no session store.
+
+### Citations are filtered, not trusted
+
+Both citation kinds are checked against what the tools actually returned before
+the brief leaves the API, so the model cannot invent a source URL:
+
+- **Corpus** — `search_corpus` records every `source_url` it returned into
+  `BriefDeps`; an `@agent.output_validator` in `api/app/agent.py` drops
+  citations pointing anywhere else.
+- **Web** — results come back as `NativeToolReturnPart`s in the message history
+  (the only place server-side tool output is readable), so the equivalent
+  filtering lives in `_drop_unbacked_web_citations` in `api/app/main.py`.
+
+Both log what they drop. A non-zero drop count in the api logs means the prompt
+needs tightening, not that the filter is misbehaving.
 
 ### Key files
 
-- `api/app/agent.py` — system prompt and the single `search_corpus` tool. The
-  prompt tells the model to search before answering anything about Spanberger's
-  remarks, and to cite title/speaker/date.
-- `api/app/main.py` — `/health` and `/api/chat`. Conversation history lives in the
-  in-process `_SESSIONS` dict keyed by `session_id`: single-replica and lost on
-  restart, which is called out in a comment there.
+- `api/app/agent.py` — system prompt, the `search_corpus` tool, the `WebSearch`
+  capability, and the corpus-citation validator.
+- `api/app/schemas.py` — the brief's pydantic models. These double as the agent's
+  `output_type`, so their `Field` descriptions are **part of the prompt** — keep
+  them consistent with the system prompt when editing either.
+- `api/app/main.py` — `/health` and `/api/talking-points`, plus web-citation
+  filtering.
 - `api/app/config.py` — pydantic-settings `Settings`; every env var the api reads.
 - `scraping/corpus_lib.py` — the corpus frontmatter schema and `ROLE_TIMELINE`.
 - `ingest/ingest.py` — chunking + upsert; re-running replaces a file's points
@@ -62,3 +89,11 @@ documented in `.env.example`.
 After changing anything under `data/`, re-run ingest so Qdrant matches the corpus.
 `python ingest/ingest.py --dry-run` parses and chunks without embedding or writing —
 use it to sanity-check frontmatter changes cheaply, since embedding calls cost money.
+
+Briefs cost money per run, and web search is billed **per search** ($10 per 1,000)
+on top of tokens. `WEB_SEARCH_MAX_USES` caps that; set it to `0` to iterate on
+prompts or the UI using the corpus alone.
+
+`pydantic-ai` is pinned `>=2.31,<3.0` — 2.31 is where web search became a
+*capability* (`Agent(capabilities=[WebSearch(...)])`). Older releases used a
+`builtin_tools=` parameter that no longer exists, so don't loosen that floor.
