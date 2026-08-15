@@ -1,96 +1,235 @@
-"""Request and response models for the talking-points endpoint.
+"""Request/response models for the drafting API.
 
-`TalkingPointsBrief` doubles as the agent's `output_type`, so its field
-descriptions are part of the prompt the model sees -- they carry the sourcing
-rules (verbatim quotes, no invented URLs) that the system prompt states in
-prose. Keep the two in sync when editing either.
+Kept separate from app/models.py so the wire format can diverge from the
+storage schema (e.g. section_count on a list row, nested sources on a read).
 """
+from datetime import date, datetime
+from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
-
-class CorpusCitation(BaseModel):
-    """A passage from Spanberger's own remarks backing a talking point."""
-
-    quote: str = Field(
-        description=(
-            "A verbatim excerpt from a passage returned by search_corpus. Copy "
-            "the wording exactly -- do not paraphrase, tidy, or combine "
-            "passages."
-        )
-    )
-    title: str = Field(description="The title shown in brackets on the search_corpus hit.")
-    date: str = Field(description="The date shown on the search_corpus hit (YYYY-MM-DD).")
-    source_url: str = Field(
-        description=(
-            "The exact Source URL printed under the passage in the "
-            "search_corpus output. Never construct or guess a URL."
-        )
-    )
+SpeechStatus = Literal["draft", "review", "final"]
 
 
-class WebCitation(BaseModel):
-    """A current fact from web search that the corpus cannot supply."""
-
-    claim: str = Field(description="What this source establishes, in one sentence.")
-    title: str = Field(description="The title of the page, as returned by web search.")
-    url: str = Field(
-        description=(
-            "The exact URL returned by web search. Never construct or guess a "
-            "URL; citations whose URL did not appear in a search result are "
-            "discarded before the brief is returned."
-        )
-    )
+class ORMModel(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
 
 
-class TalkingPoint(BaseModel):
-    """One message to land at the event, with its supporting evidence."""
-
-    headline: str = Field(description="A short label for the point, a few words.")
-    talking_point: str = Field(
-        description=(
-            "The substance of the point, written as something the Governor "
-            "could say aloud at this event."
-        )
-    )
-    corpus_support: list[CorpusCitation] = Field(
-        default_factory=list,
-        description=(
-            "Prior remarks backing this point. Leave empty rather than citing "
-            "a passage that is only loosely related."
-        ),
-    )
-    web_context: list[WebCitation] = Field(
-        default_factory=list,
-        description="Current facts from web search relevant to this point.",
-    )
+# --- voice profiles ---------------------------------------------------------
 
 
-class TalkingPointsBrief(BaseModel):
-    """A prep brief for a single upcoming event."""
-
-    event_summary: str = Field(
-        description="What the event is, restated from the request in one or two sentences."
-    )
-    framing: str = Field(
-        description="How to frame the appearance overall -- the through-line connecting the points."
-    )
-    points: list[TalkingPoint] = Field(description="The talking points, most important first.")
-    likely_questions: list[str] = Field(
-        default_factory=list,
-        description="Questions press or attendees are likely to ask at this event.",
-    )
-    gaps: list[str] = Field(
-        default_factory=list,
-        description=(
-            "Topics this event calls for where the corpus held no relevant "
-            "prior remarks. Say so here instead of stretching a loosely "
-            "related passage to cover it."
-        ),
-    )
+class VoiceProfileCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    description: str | None = None
+    prompt: str = Field(min_length=1)
 
 
-class BriefRequest(BaseModel):
-    """A free-text description of the event to prepare for."""
+class VoiceProfileUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = None
+    prompt: str | None = Field(default=None, min_length=1)
 
+
+class VoiceProfileRead(ORMModel):
+    id: str
+    name: str
+    description: str | None
     prompt: str
+    created_at: datetime
+    updated_at: datetime
+
+
+# --- section sources --------------------------------------------------------
+
+
+class SectionSourceCreate(BaseModel):
+    """Attach a corpus chunk to a section.
+
+    Only qdrant_point_id is required: anything left unset is filled in from the
+    live Qdrant payload. Callers holding a search hit can pass the snapshot
+    fields directly to record exactly what they saw, including the score.
+    """
+
+    qdrant_point_id: str
+    quoted_text: str | None = None
+    source_file: str | None = None
+    chunk_index: int | None = None
+    title: str | None = None
+    speaker: str | None = None
+    date: str | None = None
+    speech_type: str | None = None
+    source_url: str | None = None
+    relevance_score: float | None = None
+
+
+class SectionSourceRead(ORMModel):
+    id: str
+    section_id: str
+    qdrant_point_id: str
+    position: int
+    quoted_text: str
+    source_file: str | None
+    chunk_index: int | None
+    title: str | None
+    speaker: str | None
+    date: str | None
+    speech_type: str | None
+    source_url: str | None
+    relevance_score: float | None
+    created_at: datetime
+
+
+# --- sections ---------------------------------------------------------------
+
+
+class SectionCreate(BaseModel):
+    heading: str | None = None
+    text: str = ""
+    intent: str | None = None
+    voice_profile_id: str | None = None
+
+
+class SectionUpdate(BaseModel):
+    heading: str | None = None
+    text: str | None = None
+    intent: str | None = None
+    voice_profile_id: str | None = None
+
+
+class SectionRead(ORMModel):
+    id: str
+    speech_id: str
+    position: int
+    heading: str | None
+    text: str
+    intent: str | None
+    voice_profile_id: str | None
+    created_at: datetime
+    updated_at: datetime
+    sources: list[SectionSourceRead] = []
+
+
+class SectionReorder(BaseModel):
+    section_ids: list[str] = Field(min_length=1)
+
+
+# --- speeches ---------------------------------------------------------------
+
+
+class SpeechCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=500)
+    occasion: str | None = None
+    event_date: date | None = None
+    status: SpeechStatus = "draft"
+    notes: str | None = None
+    voice_profile_id: str | None = None
+    sections: list[SectionCreate] = []
+
+
+class SpeechUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=500)
+    occasion: str | None = None
+    event_date: date | None = None
+    status: SpeechStatus | None = None
+    notes: str | None = None
+    voice_profile_id: str | None = None
+
+
+class SpeechSummary(ORMModel):
+    id: str
+    title: str
+    occasion: str | None
+    event_date: date | None
+    status: str
+    notes: str | None
+    voice_profile_id: str | None
+    created_at: datetime
+    updated_at: datetime
+    section_count: int = 0
+
+
+class SpeechRead(SpeechSummary):
+    sections: list[SectionRead] = []
+
+
+# --- search -----------------------------------------------------------------
+
+
+class SearchRequest(BaseModel):
+    query: str = Field(min_length=1)
+    top_k: int | None = Field(default=None, ge=1, le=50)
+
+
+class SearchHit(BaseModel):
+    """A corpus chunk, shaped so it can be posted straight back as a
+    SectionSourceCreate."""
+
+    id: str
+    score: float
+    text: str | None = None
+    title: str | None = None
+    speaker: str | None = None
+    date: str | None = None
+    speech_type: str | None = None
+    source_url: str | None = None
+    source_file: str | None = None
+    chunk_index: int | None = None
+
+
+# --- briefs -----------------------------------------------------------------
+
+BriefStatus = Literal["researching", "outline_proposed", "drafting", "ready"]
+
+
+class SectionWebSourceRead(ORMModel):
+    id: str
+    section_id: str
+    position: int
+    url: str
+    title: str | None
+    claim: str | None
+    created_at: datetime
+
+
+class BriefSectionRead(SectionRead):
+    """A talking point: a section, plus the web citations a plain section has
+    no column for."""
+
+    web_sources: list[SectionWebSourceRead] = []
+
+
+class BriefMessageRead(ORMModel):
+    id: str
+    role: str
+    content: str
+    position: int
+    created_at: datetime
+
+
+class BriefCreate(BaseModel):
+    prompt: str = Field(min_length=1)
+
+
+class BriefMessageSend(BaseModel):
+    message: str = Field(min_length=1)
+
+
+class BriefSummary(ORMModel):
+    """List row. `speech_id` is the brief's id -- a brief has no identity apart
+    from the speech it extends."""
+
+    speech_id: str
+    title: str = ""
+    event_prompt: str
+    status: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class BriefRead(BriefSummary):
+    event_summary: str | None = None
+    framing: str | None = None
+    likely_questions: list[str] = []
+    gaps: list[str] = []
+    points: list[BriefSectionRead] = []
+    messages: list[BriefMessageRead] = []

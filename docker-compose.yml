@@ -22,6 +22,7 @@ services:
     environment:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-5}
+      APP_DATABASE_URL: ${APP_DATABASE_URL:-sqlite+aiosqlite:////data/app.db}
       QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
       QDRANT_COLLECTION_NAME: ${QDRANT_COLLECTION_NAME:-writing_style}
       QDRANT_VECTOR_SIZE: ${QDRANT_VECTOR_SIZE:-1536}
@@ -29,12 +30,16 @@ services:
       GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT}
       GOOGLE_CLOUD_LOCATION: ${GOOGLE_CLOUD_LOCATION:-us-central1}
       GEMINI_EMBEDDING_MODEL: ${GEMINI_EMBEDDING_MODEL:-gemini-embedding-001}
+      RAG_TOP_K: ${RAG_TOP_K:-5}
       BRIEF_TOP_K: ${BRIEF_TOP_K:-8}
       WEB_SEARCH_MAX_USES: ${WEB_SEARCH_MAX_USES:-5}
       MAX_OUTPUT_TOKENS: ${MAX_OUTPUT_TOKENS:-16000}
       GOOGLE_APPLICATION_CREDENTIALS: /root/.config/gcloud/application_default_credentials.json
     volumes:
       - ${HOME}/.config/gcloud:/root/.config/gcloud:ro,z
+      # Named volume, so no :z -- podman labels these itself. The ,z above is
+      # only needed because that one is a bind mount of a host directory.
+      - app_db:/data
     ports:
       - "${API_PORT:-8000}:8000"
     networks:
@@ -56,6 +61,8 @@ services:
 volumes:
   qdrant_storage:
     name: writing-style-qdrant-storage
+  app_db:
+    name: writing-style-app-db
 
 networks:
   app-network:

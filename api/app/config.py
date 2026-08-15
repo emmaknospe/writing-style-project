@@ -5,6 +5,10 @@ class Settings(BaseSettings):
     anthropic_api_key: str
     anthropic_model: str = "claude-sonnet-5"
 
+    # Four slashes: sqlite+aiosqlite:/// + the absolute path /data/app.db, which
+    # is the named volume mounted into the api container by docker-compose.yml.
+    app_database_url: str = "sqlite+aiosqlite:////data/app.db"
+
     qdrant_url: str = "http://qdrant:6333"
     qdrant_collection_name: str = "writing_style"
     qdrant_vector_size: int = 1536
@@ -14,6 +18,12 @@ class Settings(BaseSettings):
     gemini_embedding_model: str = "gemini-embedding-001"
 
     # Corpus chunks per search_corpus call. Higher than a chat turn would need:
+    # a brief sweeps several themes, so each individual query is narrower.
+    # Default for the source-picker search endpoint (routers/search.py), which
+    # backs a human scanning hits one screen at a time.
+    rag_top_k: int = 5
+
+    # Corpus chunks per search_corpus call. Higher than the picker's default:
     # a brief sweeps several themes, so each individual query is narrower.
     brief_top_k: int = 8
 
