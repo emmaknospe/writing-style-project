@@ -6,7 +6,7 @@ is part of tag.py's cache key, so bumping it invalidates every cached label and
 forces a full re-tag on the next run.
 """
 
-TAXONOMY_VERSION = "v1"
+TAXONOMY_VERSION = "v2"
 
 # One per document. Decides which intermediate/<visibility>/<category>/ folder
 # the document is written to, so these strings are also directory names.
@@ -65,6 +65,15 @@ CATEGORIES = {
         "newspaper or TV story written by a reporter, not by her or her staff. "
         "The words are the outlet's. Use this even when she is quoted at "
         "length, as long as the surrounding article is the outlet's reporting."
+    ),
+    "internal-document": (
+        "A staff-facing working document rather than anything published: fact "
+        "sheets, briefing memos, background references, run-of-show and "
+        "prep material. Written to be used inside an office, not read by the "
+        "public -- headed and dated, often terse, addressed to colleagues or "
+        "to the principal. Never her own voice, even when it quotes her. "
+        "Everything in this corpus so labeled is synthetic and says so in its "
+        "title and notes."
     ),
 }
 
