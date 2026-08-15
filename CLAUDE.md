@@ -1,7 +1,8 @@
 # writing-style
 
-Generates event talking-point briefs for Abigail Spanberger, grounded in a RAG
-corpus of her speeches and campaign ads plus live web search.
+Drafts speeches in Abigail Spanberger's voice from a corpus of her public
+remarks, and generates event talking-point briefs grounded in that corpus plus
+live web search.
 
 @CLAUDE.local.md
 
@@ -12,12 +13,11 @@ Four pieces, three of them containers (`docker-compose.yml`):
 | Piece | What it is |
 | --- | --- |
 | `frontend/` | React 18 + Vite + TypeScript, served in prod by nginx, which also reverse-proxies `/api/` and `/health` to the api |
-| `api/` | FastAPI wrapping a pydantic-ai `Agent` on Claude (Anthropic) |
+| `api/` | FastAPI wrapping pydantic-ai `Agent`s on Claude (Anthropic), plus the app database (SQLite via `aiosqlite`, Alembic migrations run on boot) |
 | `qdrant` | Vector store, `qdrant/qdrant:latest`, named volume for storage |
 | `ingest/` | Standalone pipeline run **on the host**, not a container — chunks `data/*.md`, embeds via Gemini on Vertex AI, upserts into Qdrant |
 
-Request path: browser → nginx (`:3000`) → `/api/talking-points` → FastAPI →
-pydantic-ai agent → **two** grounding sources in parallel:
+Two grounding sources, deliberately split:
 
 - `search_corpus` (a normal client-side tool) → Gemini embedding → Qdrant — what
   she has *already said*. The corpus is a fixed snapshot.
@@ -25,35 +25,77 @@ pydantic-ai agent → **two** grounding sources in parallel:
   *currently true*. It executes on Anthropic's infrastructure, so there is no
   tool function for it in this repo.
 
-The agent returns a typed `TalkingPointsBrief`, not prose.
+### A brief is a speech
 
-The endpoint is **stateless** — one prompt in, one brief out, no conversation
-history and so no session store.
+Talking-point briefs reuse the speech tables rather than paralleling them:
 
-### Citations are filtered, not trusted
+| Brief concept | Storage |
+| --- | --- |
+| the brief | a `speeches` row, plus a `briefs` row for what that table can't hold |
+| a talking point | a `sections` row (`heading`, `text`, `intent` = rationale) |
+| a corpus citation | a `section_sources` row, pinned to a `qdrant_point_id` |
+| a web citation | a `section_web_sources` row |
 
-Both citation kinds are checked against what the tools actually returned before
-the brief leaves the API, so the model cannot invent a source URL:
+So outline editing needs no bespoke endpoints — the ordinary
+`PATCH /api/sections/{id}`, `DELETE`, append and reorder routes in
+`routers/speeches.py` do it, and a finished brief is already a speech with
+sourced sections.
 
-- **Corpus** — `search_corpus` records every `source_url` it returned into
-  `BriefDeps`; an `@agent.output_validator` in `api/app/agent.py` drops
-  citations pointing anywhere else.
-- **Web** — results come back as `NativeToolReturnPart`s in the message history
-  (the only place server-side tool output is readable), so the equivalent
-  filtering lives in `_drop_unbacked_web_citations` in `api/app/main.py`.
+### The approval gate
 
-Both log what they drop. A non-zero drop count in the api logs means the prompt
-needs tightening, not that the filter is misbehaving.
+`briefs.status` runs `researching → outline_proposed → drafting → ready`,
+returning to `drafting` on each revision. Two agents enforce it:
+
+- `outline_agent` researches and proposes an outline. Its output type has no
+  field capable of holding a talking point, so it **cannot** skip ahead — the
+  gate holds even if the prompt is ignored.
+- `draft_agent` writes prose over the outline *as the user left it*, replaying
+  the outline run's `agent_messages` so the research isn't repeated.
+
+Prose is only ever written in the `drafting` transition.
+
+### Citations are verified, not trusted
+
+The model supplies a **Qdrant point id and a quote** — never bibliographic
+metadata. `verify_corpus_citations` in `api/app/agent.py` resolves the id via
+`vector_store.get_by_ids()`, checks the quote word-for-word with
+`app/quotes.py`, and fills title/speaker/date/url **from the stored payload**.
+So a real passage cannot be misattributed to the wrong speech or date.
+
+Web results are only readable as `NativeToolReturnPart`s in the message history,
+so web citations are filtered against the URLs a search actually returned
+(`_searched_web_urls` in `routers/briefs.py`).
+
+Both log what they drop. A non-zero drop count means the prompt needs
+tightening, not that the filter is misbehaving.
+
+### Streaming
+
+The two agent-running endpoints stream SSE over **POST** (`EventSource` is
+GET-only, so the frontend reads the body with `fetch` + `ReadableStream`).
+Events: `activity`, `outline`, `brief`, `error`, `done`.
+
+Two things are easy to get wrong here:
+
+- **nginx buffers proxied responses by default.** `proxy_buffering off` is set
+  in `frontend/nginx.conf`; without it the feed works against `:8000` and
+  silently arrives in one lump through `:3000`.
+- A web-search **call**'s arguments stream in as JSON deltas, so the query is
+  only complete at `PartEndEvent`; a **result** block arrives whole and is read
+  at `PartStartEvent`. Matching each on one event kind avoids duplicate lines.
 
 ### Key files
 
-- `api/app/agent.py` — system prompt, the `search_corpus` tool, the `WebSearch`
-  capability, and the corpus-citation validator.
-- `api/app/schemas.py` — the brief's pydantic models. These double as the agent's
-  `output_type`, so their `Field` descriptions are **part of the prompt** — keep
-  them consistent with the system prompt when editing either.
-- `api/app/main.py` — `/health` and `/api/talking-points`, plus web-citation
-  filtering.
+- `api/app/agent.py` — the two agents, the `search_corpus` tool, the `WebSearch`
+  capability, and `verify_corpus_citations`.
+- `api/app/agent_outputs.py` — LLM output contracts. Every `Field` description
+  is **prompt surface** the model reads; keep them consistent with the system
+  prompts when editing either.
+- `api/app/routers/briefs.py` — brief endpoints, the SSE event mapping, and
+  persistence of outlines and drafts.
+- `api/app/schemas.py` — wire DTOs (main's speech/voice-profile models plus the
+  brief ones). Distinct from `agent_outputs.py` on purpose.
+- `api/app/models.py` / `api/migrations/` — the app database.
 - `api/app/config.py` — pydantic-settings `Settings`; every env var the api reads.
 - `scraping/corpus_lib.py` — the corpus frontmatter schema and `ROLE_TIMELINE`.
 - `ingest/ingest.py` — chunking + upsert; re-running replaces a file's points
@@ -97,3 +139,13 @@ prompts or the UI using the corpus alone.
 `pydantic-ai` is pinned `>=2.31,<3.0` — 2.31 is where web search became a
 *capability* (`Agent(capabilities=[WebSearch(...)])`). Older releases used a
 `builtin_tools=` parameter that no longer exists, so don't loosen that floor.
+
+The compose project is shared with the other worktrees and the container names
+are fixed, so the *running* api may be another checkout's build. Rebuild with
+`podman compose build api` then `up -d --force-recreate api`: a bare
+`up -d --build` has silently served a stale image.
+
+`api/tests/` runs on the host with `pip install -r api/requirements-dev.txt`
+then `cd api && python -m pytest tests/`. It covers `app/quotes.py` — the
+verbatim check that keeps invented words out of quotations — and needs no
+credentials, which is why that module is kept free of config imports.

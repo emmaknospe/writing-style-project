@@ -40,3 +40,30 @@ Originally, this was more complex, but I also had some trouble getting claude to
 
 
 
+
+## Talking-point briefs
+
+Describe an upcoming event and the app produces a brief for it, in three moves:
+
+1. **Research.** The agent searches Spanberger's corpus and the live web,
+   streaming what it's doing as it goes.
+2. **Propose an outline.** It comes back with the angles it thinks the brief
+   should take, each with a rationale, written to the sidebar as real,
+   editable points. Rename, reorder, delete, add — nothing is drafted yet.
+3. **Draft.** On approval it writes the talking points over the outline *as you
+   left it*, then you can keep revising by talking to it.
+
+This is steps 1 and 2 of the process above, with a person in the loop between
+them. A brief is stored as a speech — its talking points are sections and its
+citations are section sources — so it drops straight into the drafting model.
+
+**Citations are verified rather than trusted.** The model cites a corpus chunk
+by Qdrant point id and supplies a quote; the server resolves the id, checks the
+quote word-for-word against that chunk, and fills in title, date and URL from
+the stored payload. It never gets to write its own citation metadata. Web
+citations are checked against the URLs a search actually returned. Anything
+that fails is dropped and logged.
+
+Web search is billed per search ($10 per 1,000) on top of tokens.
+`WEB_SEARCH_MAX_USES` (default 5) caps it per run; `0` builds briefs from the
+corpus alone.
