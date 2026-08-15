@@ -177,3 +177,62 @@ class SearchHit(BaseModel):
     source_url: str | None = None
     source_file: str | None = None
     chunk_index: int | None = None
+
+
+# --- briefs -----------------------------------------------------------------
+
+BriefStatus = Literal["researching", "outline_proposed", "drafting", "ready"]
+
+
+class SectionWebSourceRead(ORMModel):
+    id: str
+    section_id: str
+    position: int
+    url: str
+    title: str | None
+    claim: str | None
+    created_at: datetime
+
+
+class BriefSectionRead(SectionRead):
+    """A talking point: a section, plus the web citations a plain section has
+    no column for."""
+
+    web_sources: list[SectionWebSourceRead] = []
+
+
+class BriefMessageRead(ORMModel):
+    id: str
+    role: str
+    content: str
+    position: int
+    created_at: datetime
+
+
+class BriefCreate(BaseModel):
+    prompt: str = Field(min_length=1)
+
+
+class BriefMessageSend(BaseModel):
+    message: str = Field(min_length=1)
+
+
+class BriefSummary(ORMModel):
+    """List row. `speech_id` is the brief's id -- a brief has no identity apart
+    from the speech it extends."""
+
+    speech_id: str
+    title: str = ""
+    event_prompt: str
+    status: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class BriefRead(BriefSummary):
+    event_summary: str | None = None
+    framing: str | None = None
+    likely_questions: list[str] = []
+    gaps: list[str] = []
+    points: list[BriefSectionRead] = []
+    messages: list[BriefMessageRead] = []
