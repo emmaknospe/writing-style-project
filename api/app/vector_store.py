@@ -40,11 +40,15 @@ def ensure_collection(max_retries: int = 10, retry_delay_seconds: float = 2.0) -
 
 def search(query_vector: list[float], top_k: int) -> list[dict]:
     """Return the top_k nearest corpus chunks to query_vector, each as
-    {score, **payload} -- payload keys: title, display_title, speaker, date,
-    role, category, voice, location, source_name, source_url, retrieved_date,
-    word_count, tags, classifier, classifier_confidence, source_file,
-    visibility, chunk_index, chunk_count, text. Written by ingest/ingest.py;
-    see PAYLOAD_META_KEYS there.
+    {id, score, **payload} -- payload keys: title, display_title, speaker,
+    date, role, category, voice, location, source_name, source_url,
+    retrieved_date, word_count, tags, classifier, classifier_confidence,
+    source_file, visibility, chunk_index, chunk_count, text. Written by
+    ingest/ingest.py; see PAYLOAD_META_KEYS there.
+
+    `id` is the Qdrant point id, which is what a section source stores to name
+    the exact chunk it cites. No payload key is called `id`, so nothing is
+    shadowed here.
     """
     result = qdrant_client.query_points(
         collection_name=settings.qdrant_collection_name,
@@ -52,4 +56,19 @@ def search(query_vector: list[float], top_k: int) -> list[dict]:
         limit=top_k,
         with_payload=True,
     )
-    return [{"score": point.score, **point.payload} for point in result.points]
+    return [{"id": str(point.id), "score": point.score, **point.payload} for point in result.points]
+
+
+def get_by_ids(point_ids: list[str]) -> list[dict]:
+    """Fetch specific points by id, each as {id, **payload}.
+
+    Used when attaching a source by point id alone -- the payload is the
+    snapshot that gets copied into section_sources. Missing ids are simply
+    absent from the result; the caller decides whether that's a 404.
+    """
+    points = qdrant_client.retrieve(
+        collection_name=settings.qdrant_collection_name,
+        ids=point_ids,
+        with_payload=True,
+    )
+    return [{"id": str(point.id), **(point.payload or {})} for point in points]
