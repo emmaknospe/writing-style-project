@@ -368,6 +368,13 @@ body {
   color: #888;
 }
 
+/* Flagged rather than styled neutrally: a quote that isn't first-person needs
+   a second look before it goes in her mouth. */
+.citation-voice {
+  color: #a1660a;
+  font-weight: 600;
+}
+
 .web-citations {
   margin: 0;
   padding-left: 1.1rem;

@@ -179,7 +179,8 @@ class SectionSource(Base):
     title: Mapped[str | None] = mapped_column(String(500), nullable=True)
     speaker: Mapped[str | None] = mapped_column(String(200), nullable=True)
     date: Mapped[str | None] = mapped_column(String(10), nullable=True)
-    speech_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    category: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    voice: Mapped[str | None] = mapped_column(String(20), nullable=True)
     source_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     relevance_score: Mapped[float | None] = mapped_column(Float, nullable=True)
 

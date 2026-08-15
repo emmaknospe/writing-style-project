@@ -9,7 +9,11 @@ export interface SectionSource {
   title: string | null;
   speaker: string | null;
   date: string | null;
-  speech_type: string | null;
+  category: string | null;
+  /** "first-person" | "mixed" | "third-party" — whether the words are hers.
+   *  Surfaced in the UI because a quote pulled from a staff-written press
+   *  release is not the same claim as one from a delivered speech. */
+  voice: string | null;
   source_url: string | null;
   position: number;
 }

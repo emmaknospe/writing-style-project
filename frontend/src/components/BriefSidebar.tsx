@@ -35,6 +35,15 @@ export default function BriefSidebar({ brief }: { brief: Brief }) {
                         s.title
                       )}
                       {s.date && <span className="citation-date"> &middot; {s.date}</span>}
+                      {s.voice && s.voice !== "first-person" && (
+                        <span
+                          className="citation-voice"
+                          title="Not a delivered first-person passage — check the wording is hers"
+                        >
+                          {" "}
+                          &middot; {s.voice}
+                        </span>
+                      )}
                     </cite>
                   </blockquote>
                 ))}

@@ -57,7 +57,8 @@ class SectionSourceCreate(BaseModel):
     title: str | None = None
     speaker: str | None = None
     date: str | None = None
-    speech_type: str | None = None
+    category: str | None = None
+    voice: str | None = None
     source_url: str | None = None
     relevance_score: float | None = None
 
@@ -73,7 +74,8 @@ class SectionSourceRead(ORMModel):
     title: str | None
     speaker: str | None
     date: str | None
-    speech_type: str | None
+    category: str | None
+    voice: str | None
     source_url: str | None
     relevance_score: float | None
     created_at: datetime
@@ -170,7 +172,8 @@ class SearchHit(BaseModel):
     title: str | None = None
     speaker: str | None = None
     date: str | None = None
-    speech_type: str | None = None
+    category: str | None = None
+    voice: str | None = None
     source_url: str | None = None
     source_file: str | None = None
     chunk_index: int | None = None

@@ -320,10 +320,20 @@ async def _apply_draft(session: AsyncSession, brief: Brief, result) -> dict[str,
             session.add(SectionSource(section_id=section.id, position=position, **source))
 
         allowed = _searched_web_urls(result.all_messages())
-        kept = [c for c in point.web_context if c.url in allowed]
+        kept: list = []
+        seen_urls: set[str] = set()
+        for citation in point.web_context:
+            # Same rule as corpus sources: one row per (section, url), and the
+            # model does repeat a URL under a single point.
+            if citation.url not in allowed or citation.url in seen_urls:
+                continue
+            seen_urls.add(citation.url)
+            kept.append(citation)
         dropped = len(point.web_context) - len(kept)
         if dropped:
-            logger.warning("dropped %d web citation(s) not returned by web search", dropped)
+            logger.warning(
+                "dropped %d web citation(s): not returned by web search, or duplicated", dropped
+            )
         for position, citation in enumerate(kept):
             session.add(
                 SectionWebSource(
@@ -423,7 +433,9 @@ async def approve(brief_id: str, session: AsyncSession = Depends(get_session)):
     if not brief.speech.sections:
         raise HTTPException(status_code=400, detail="the outline has no points to draft")
 
-    brief.status = "drafting"
+    # Status advances in _apply_draft, which only runs on success. Setting it
+    # here would strand a failed run in `drafting` with empty points -- the
+    # sidebar would show a blank brief instead of the outline you can retry.
     await _add_message(session, brief, "user", "Approved the outline — draft it.")
     await session.commit()
 

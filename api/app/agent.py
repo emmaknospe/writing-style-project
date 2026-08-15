@@ -53,6 +53,17 @@ _RESEARCH_RULES = (
     "happened since the corpus was assembled. Use it for the event's specifics "
     "and current facts -- never as a substitute for the corpus when the "
     "question is what she has said.\n\n"
+    "Each passage is labeled with its category and its **voice**, and voice "
+    "decides whether you may quote it as her:\n"
+    "- 'first-person' is her own words -- the only safe thing to put in her "
+    "mouth, and the authority on how she speaks.\n"
+    "- 'mixed' is staff-written text that quotes her, so only the material "
+    "inside the quotation marks is hers. Quote that and nothing around it.\n"
+    "- 'third-party' is not her words at all. Use it for facts if you must, "
+    "but never as something she said.\n"
+    "Prefer first-person passages for every quotation. If the best evidence "
+    "for a point is only a quote inside a press release, say so in the "
+    "rationale rather than passing it off as a speech.\n\n"
     "Sourcing rules, which matter more than coverage:\n"
     "- Every corpus passage is printed with an `id:`. Cite a passage by that "
     "id, copied exactly. Never invent an id, and never cite a passage you did "
@@ -96,17 +107,31 @@ DRAFT_PROMPT = (
 )
 
 
+def _format_hit(hit: dict) -> str:
+    """Render one hit, leading with the id the model must cite it by.
+
+    `display_title` is the cleaned-up title; fall back to the source-page title
+    on documents that predate it.
+    """
+    title = hit.get("display_title") or hit.get("title")
+    header = f"{title} -- {hit.get('speaker')}, {hit.get('date')}"
+    for key in ("category", "voice"):
+        if hit.get(key):
+            header += f", {hit[key]}"
+    tags = hit.get("tags")
+    if tags:
+        header += f", tags: {', '.join(tags)}"
+    return (
+        f"id: {hit.get('id')}\n"
+        f"[{header}] (relevance={hit['score']:.3f})\n"
+        f"{hit.get('text')}"
+    )
+
+
 def _format_hits(hits: list[dict]) -> str:
-    """Render corpus hits for the model, leading with the id it must cite."""
     if not hits:
         return "No relevant passages found in the corpus."
-    return "\n\n---\n\n".join(
-        f"id: {hit.get('id')}\n"
-        f"[{hit.get('title')} -- {hit.get('speaker')}, {hit.get('date')}, "
-        f"{hit.get('speech_type')}] (relevance={hit['score']:.3f})\n"
-        f"{hit.get('text')}"
-        for hit in hits
-    )
+    return "\n\n---\n\n".join(_format_hit(hit) for hit in hits)
 
 
 async def search_corpus(query: str) -> str:
@@ -194,8 +219,16 @@ def verify_corpus_citations(
     chunks = {c["id"]: c for c in get_by_ids([c.point_id for c in citations])}
 
     verified: list[dict] = []
+    seen: set[str] = set()
     unknown_id = not_verbatim = 0
     for citation in citations:
+        # A section may cite a given chunk once (uq_section_source_point), and
+        # the model does sometimes list the same passage twice under one point.
+        # Keep the first -- it is the one it led with.
+        if citation.point_id in seen:
+            continue
+        seen.add(citation.point_id)
+
         chunk = chunks.get(citation.point_id)
         if chunk is None:
             unknown_id += 1
@@ -212,10 +245,15 @@ def verify_corpus_citations(
             {
                 "qdrant_point_id": citation.point_id,
                 "quoted_text": citation.quote,
-                "title": chunk.get("title"),
+                # display_title is the cleaned-up title; older documents only
+                # have the source-page one.
+                "title": chunk.get("display_title") or chunk.get("title"),
                 "speaker": chunk.get("speaker"),
                 "date": chunk.get("date"),
-                "speech_type": chunk.get("speech_type"),
+                "category": chunk.get("category"),
+                # Recorded so a reader can tell a line she delivered from one a
+                # press office wrote around a quote of hers.
+                "voice": chunk.get("voice"),
                 "source_url": chunk.get("source_url"),
                 "source_file": chunk.get("source_file"),
                 "chunk_index": chunk.get("chunk_index"),
