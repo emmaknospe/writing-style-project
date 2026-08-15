@@ -273,7 +273,8 @@ async def attach_source(
         "title": hit.get("title"),
         "speaker": hit.get("speaker"),
         "date": hit.get("date"),
-        "speech_type": hit.get("speech_type"),
+        "category": hit.get("category"),
+        "voice": hit.get("voice"),
         "source_url": hit.get("source_url"),
         "relevance_score": None,
     }

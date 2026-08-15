@@ -40,9 +40,11 @@ def ensure_collection(max_retries: int = 10, retry_delay_seconds: float = 2.0) -
 
 def search(query_vector: list[float], top_k: int) -> list[dict]:
     """Return the top_k nearest corpus chunks to query_vector, each as
-    {id, score, **payload} -- payload keys: title, speaker, date, role,
-    speech_type, location, source_name, source_url, retrieved_date,
-    word_count, tags, source_file, chunk_index, chunk_count, text.
+    {id, score, **payload} -- payload keys: title, display_title, speaker,
+    date, role, category, voice, location, source_name, source_url,
+    retrieved_date, word_count, tags, classifier, classifier_confidence,
+    source_file, visibility, chunk_index, chunk_count, text. Written by
+    ingest/ingest.py; see PAYLOAD_META_KEYS there.
 
     `id` is the Qdrant point id, which is what a section source stores to name
     the exact chunk it cites. No payload key is called `id`, so nothing is
